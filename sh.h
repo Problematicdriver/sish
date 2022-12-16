@@ -1,4 +1,5 @@
-extern int yylex();
-extern int chars;
-extern int words;
-extern int lines;
+#include <string.h>
+#include <stdio.h>
+
+extern int yyparse();
+void yyerror();

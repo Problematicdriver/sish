@@ -1,22 +1,30 @@
+LEX = lex
+YACC = yacc
 CC = cc
-LEX = flex
-CFLAGS = -Wall -Werror -Wextra
-LDFLAGS = -ll
-LFlAGS = --noyywrap
 
-all: sh
+sh: y.tab.o lex.yy.o
+	$(CC) -o sh sh.c y.tab.o lex.yy.o 
 
-sh: sh.o tokenize.o
-	$(CC) $(CFLAGS) -o $@ ${.ALLSRC} 
+# These dependency rules indicate that (1) lex.yy.o depends on
+# lex.yy.c and y.tab.h and (2) lex.yy.o and y.tab.o depend on calc.h.
+# Make uses the dependencies to figure out what rules must be run when
+# a file has changed.
 
-sh.o: sh.c
-	$(CC) -c sh.c
+lex.yy.o: lex.yy.c y.tab.h
+lex.yy.o y.tab.o: sh.h
 
-tokenize.o: tokenize.c
-	$(CC) -o $@ -c $> $(LFLAGS) 
+y.tab.c y.tab.h: sh.y
+	$(YACC) -d sh.y
 
-tokenize.c: tokenize.l
-	$(LEX) $(LFlAGS) -o $@ $>
+## this is the make rule to use lex to generate the file lex.yy.c from
+## our file calc.l
+
+lex.yy.c: sh.l
+	$(LEX) sh.l
+
+## Make clean will delete all of the generated files so we can start
+## from scratch
 
 clean:
-	rm -rf *.o tokenize.c tokenize sh
+	-rm -f *.o lex.yy.c *.tab.* sh *.output
+
