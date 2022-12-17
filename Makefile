@@ -3,7 +3,7 @@ YACC = yacc
 CC = cc
 
 sh: y.tab.o lex.yy.o
-	$(CC) -o sh sh.c y.tab.o lex.yy.o 
+	$(CC) -g -o sh sh.c y.tab.o lex.yy.o 
 
 # These dependency rules indicate that (1) lex.yy.o depends on
 # lex.yy.c and y.tab.h and (2) lex.yy.o and y.tab.o depend on calc.h.
