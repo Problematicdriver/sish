@@ -69,7 +69,6 @@ run_list()
     
     for (c = head, i = 0; c != NULL; c = c->next, i++) {
         Redirect *r;
-        int fd;
         child[i] = fork();
         if (child[i] == 0) {
             if (c != head) {
@@ -79,12 +78,16 @@ run_list()
                 dup2(pipefd[1], STDOUT_FILENO);
             }
             for (r = c->redirects; r != NULL; r = r->next) {
-                fd = open(r->file, O_CREAT | O_RDWR);
-                dup2(fd, r->fd);
+                r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
+                lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
+                dup2(r->fd, r->red_fileno);
             }
             close(pipefd[0]);
             close(pipefd[1]);
             run(c);
+            for (r = c->redirects; r != NULL; r = r->next) {
+                close(r->fd);
+            }
         }
         assert(child[i] > 0);
     }
@@ -109,18 +112,17 @@ main(int argc, char **argv)
             case 'x':
                 f_trace = 1;
                 break;
-            defualt:
-                break;
+            case '?':
+                (void)fprintf(stderr, "Usage: %s [ -x ] [ -c command ]\n", argv[0]);
+                return EXIT_FAILURE;
         }
     }
- 
-    if (optind != argc) {
+    if (opterr != 0 && optind != argc) {
         (void)fprintf(stderr, "Usage: %s [ -x ] [ -c command ]\n", argv[0]);
         return EXIT_FAILURE;
     }
-    
     if (f_cmd) {
-        if (execvp(c, &c) < 0) {
+        if (execlp(c, c) < 0) {
             perror("execvp");
         }
         return EXIT_SUCCESS;
@@ -132,7 +134,7 @@ main(int argc, char **argv)
         if (yyparse() == 1) {
             perror("yyparse");
         }
-        print_list();
+        // print_list();
         run_list();
     }
     

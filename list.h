@@ -1,15 +1,16 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define MAX_ARGC 10
 #define FG 0
 #define BG 1
-#define STDIN   0
-#define STDOUT  1
 
 struct redirect {
+    int red_fileno;
     int fd;
+    int f_cat;
     char *file;
     struct redirect *next;
 };

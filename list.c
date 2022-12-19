@@ -58,7 +58,7 @@ red_out(char *file)
     }
     memset(r, 0, sizeof(Redirect));
     r->file = file;
-    r->fd = STDOUT;
+    r->red_fileno = STDOUT_FILENO;
     return r;
 }
 
@@ -71,7 +71,7 @@ red_in(char *file)
     }
     memset(r, 0, sizeof(Redirect));
     r->file = file;
-    r->fd = STDIN;
+    r->red_fileno = STDIN_FILENO;
     return r;
 }
 
@@ -84,5 +84,7 @@ red_cat(char *file)
     }
     memset(r, 0, sizeof(Redirect));
     r->file = file;
+    r->red_fileno = STDOUT_FILENO;
+    r->f_cat = 1;
     return r;
 }
