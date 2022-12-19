@@ -19,18 +19,18 @@
 commandline: pipeline
             /* foreground */
             /* return itself */
-            { tail = $1; head = tail; for (; head->prev != NULL; head = head->prev); $$ = $1; }
+            { tail = $1; $$ = $1; }
         | pipeline '&'
             /* background */
             /* set bg and return itself */
-            { bg = BG; tail = $1; head = tail; for (; head->prev != NULL; head = head->prev); $$ = $1; }
+            { bg = BG; tail = $1; $$ = $1; }
 
 pipeline: command
             /* return itself */
-            { $$ = $1; }
+            { n_cmd = 1; head = $1; $$ = $1; }
         | pipeline '|' command
             /* append command to pipeline, return command */
-            { $$ = link_cmd($1, $3); }
+            { n_cmd++; $$ = link_cmd($1, $3); }
 
 command: WORD
             /* return a command with name field set */
