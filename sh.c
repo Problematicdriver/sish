@@ -47,12 +47,23 @@ void
 run(Command *c)
 {
     char name[20];
+    Redirect *r;
     if (c->args[0] == NULL) {
         return;
     }
-    if (execvp(c->args[0], c->args) < 0) {
-       perror("execvp"); 
+    for (r = c->redirects; r != NULL; r = r->next) {
+        r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
+        lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
+        dup2(r->fd, r->red_fileno);
     }
+    if (execvp(c->args[0], c->args) < 0) {
+        perror("execvp"); 
+    }
+    /*
+    for (r = tail->redirects; r != NULL; r = r->next) {
+        close(r->fd);
+    }
+    */
 }
 
 void
@@ -61,6 +72,7 @@ run_list()
     Command *c;
     pid_t child[n_cmd];
     int pipefd[2], i;
+    Redirect *r;
 
     memset(&child, 0, sizeof(child));
     if (pipe(pipefd) < 0) {
@@ -68,33 +80,25 @@ run_list()
     }
     
     for (c = head, i = 0; c != NULL; c = c->next, i++) {
-        Redirect *r;
+        
         child[i] = fork();
         if (child[i] == 0) {
             if (c != head) {
                 dup2(pipefd[0], STDIN_FILENO);
-            } 
+            }
             if (c != tail) {
                 dup2(pipefd[1], STDOUT_FILENO);
-            }
-            for (r = c->redirects; r != NULL; r = r->next) {
-                r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
-                lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
-                dup2(r->fd, r->red_fileno);
             }
             close(pipefd[0]);
             close(pipefd[1]);
             run(c);
-            for (r = c->redirects; r != NULL; r = r->next) {
-                close(r->fd);
-            }
-        }
+        
+        }        
         assert(child[i] > 0);
     }
     close(pipefd[0]);
     close(pipefd[1]);
-    
-    waitpid(child[i-1], NULL, 0);
+    waitpid(child[n_cmd-1], NULL, 0);
 }
 
 int
