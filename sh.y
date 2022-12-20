@@ -1,5 +1,5 @@
 %{
-#include "sh.h"
+#include "list.h"
 %}
 %union {
     char*               str;
@@ -16,7 +16,8 @@
 %type <redirect>redirection
 
 %%
-commandline: pipeline
+commandline: {;} 
+        | pipeline
             /* foreground */
             /* return itself */
             { tail = $1; $$ = $1; }
@@ -27,7 +28,7 @@ commandline: pipeline
 
 pipeline: command
             /* return itself */
-            { n_cmd = 1; head = $1; $$ = $1; }
+            { head = $1; n_cmd = 1; $$ = $1; }
         | pipeline '|' command
             /* append command to pipeline, return command */
             { n_cmd++; $$ = link_cmd($1, $3); }

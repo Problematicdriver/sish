@@ -7,6 +7,7 @@
 #define FG 0
 #define BG 1
 
+int bg, n_cmd;
 struct redirect {
     int red_fileno;
     int fd;
@@ -28,6 +29,8 @@ struct command {
     Redirect *redirects;
 };
 typedef struct command Command;
+
+Command *head, *tail;
 
 Command*  link_cmd(Command *pipe, Command *cmd);
 Command*  cmd_from_red(Redirect *r);

@@ -4,7 +4,7 @@
 
 char *
 getinput(char *buffer, size_t buflen) {
-	printf("$$ ");
+	printf("sish$ ");
 	return fgets(buffer, buflen, stdin);
 }
 
@@ -21,22 +21,21 @@ print_cmd(Command *c)
         printf("%s ", c->args[i]);
     }
     for (r = c->redirects; r != NULL; r=r->next) {
-        if (r->fd == STDIN) {
-            strlcat(in, r->file, sizeof(in));
-            strlcat(in, " ", sizeof(in));
+        if (r->fd == STDIN_FILENO) {
+            strlcat(in, r->file, 20);
+            strlcat(in, " ", 20);
         } else {
-            strlcat(out, r->file, sizeof(out));
-            strlcat(in, " ", sizeof(out));
+            strlcat(out, r->file, 20);
+            strlcat(in, " ", 20);
         }
     }
-    printf("{>%s,<%s}", out, in); 
+    printf("{>%s<%s}", in, out); 
 }
 
 void
 print_list()
 {
     Command* c;
-    printf("%d commands in total\n", n_cmd);
     for (c = head; c != NULL; c = c->next) {
         print_cmd(c);
         printf("%s", c->next == NULL ? "\n" : " -> ");   
@@ -57,13 +56,11 @@ run(Command *c)
         dup2(r->fd, r->red_fileno);
     }
     if (execvp(c->args[0], c->args) < 0) {
-        perror("execvp"); 
+       perror("execvp"); 
     }
-    /*
-    for (r = tail->redirects; r != NULL; r = r->next) {
-        close(r->fd);
+    for (r = c->redirects; r != NULL; r = r->next) {
+       close(r->fd);
     }
-    */
 }
 
 void
@@ -72,7 +69,6 @@ run_list()
     Command *c;
     pid_t child[n_cmd];
     int pipefd[2], i;
-    Redirect *r;
 
     memset(&child, 0, sizeof(child));
     if (pipe(pipefd) < 0) {
@@ -80,25 +76,37 @@ run_list()
     }
     
     for (c = head, i = 0; c != NULL; c = c->next, i++) {
-        
+        Redirect *r;
         child[i] = fork();
         if (child[i] == 0) {
             if (c != head) {
                 dup2(pipefd[0], STDIN_FILENO);
-            }
+            } 
             if (c != tail) {
                 dup2(pipefd[1], STDOUT_FILENO);
             }
             close(pipefd[0]);
             close(pipefd[1]);
             run(c);
-        
-        }        
+        }
         assert(child[i] > 0);
     }
     close(pipefd[0]);
     close(pipefd[1]);
-    waitpid(child[n_cmd-1], NULL, 0);
+    if (n_cmd > 0) {
+        waitpid(child[n_cmd-1], NULL, 0);
+    }
+}
+
+void
+free_list()
+{
+    Command *tmp;
+    while (head != NULL) {
+        tmp = head;
+        head = head->next;
+        free(tmp);
+    }
 }
 
 int
@@ -134,12 +142,15 @@ main(int argc, char **argv)
 
     while (getinput(buf, sizeof(buf))) {
         buf[strlen(buf) - 1] = '\0';    
+        if (strlen(buf) == 0) {
+            continue;
+        }
         yyin = fmemopen(&buf, strlen(buf), "r");
         if (yyparse() == 1) {
             perror("yyparse");
         }
-        // print_list();
         run_list();
+        free_list();
     }
     
     return EXIT_SUCCESS;
