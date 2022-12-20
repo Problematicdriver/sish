@@ -14,4 +14,5 @@ BLANK           (" "|\f|\r|\t|\v)
 "<"             { return (int)('<'); }
 ">"             { return (int)('>'); }
 "&"             { return (int)('&'); }
+<<EOF>>         { yyterminate(); return 0; }
 %%
