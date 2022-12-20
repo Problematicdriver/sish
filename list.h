@@ -21,9 +21,8 @@ struct command {
     int argc;
     char* args[MAX_ARGC];
     
-    /* next and prev ommand in the pipe */
+    /* next ommand in the pipe */
     struct command *next;
-    struct command *prev;
 
     /* supports multiple files dupped to strdin/out */
     Redirect *redirects;

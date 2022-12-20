@@ -4,7 +4,6 @@ Command*
 link_cmd(Command *pipe, Command *cmd)
 {
     pipe->next = cmd;
-    cmd->prev = pipe;
     return cmd;
 }
 
