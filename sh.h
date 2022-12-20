@@ -10,10 +10,5 @@
 
 #include "list.h"
 
-#define MAX_ARGC 10
-#define FG 0
-#define BG 1
-
 int yyparse();
-void yyerror();
 FILE* yyin;
