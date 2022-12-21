@@ -3,6 +3,67 @@
 #define OPTSTR "xc:"
 #define SISH   "sish$ "
 
+int interrupted;
+int f_trace;
+int f_cmd;
+
+int 
+cd(int argc, char* args[]) 
+{
+    char *path;
+    if (argc != 1 && argc != 2) {
+        fprintf(stderr, "Usage: cd [directory]\n");
+        return EXIT_FAILURE;
+    }
+    if ((path = args[1]) == NULL) {
+        if ((path = getenv("HOME")) == NULL) {
+            return EXIT_FAILURE;
+        }
+    }
+    if (chdir(path) < 0) {
+        perror("chdir");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
+int
+echo(int argc, char* args[])
+{
+    int i;
+    for (i = 1; i < argc; i++) {
+        printf("%s ", args[i]);
+    }
+    printf("\n");
+    return EXIT_SUCCESS;
+}
+
+int
+_exit_(int argc, char* args[])
+{
+    (void)argc;
+    (void)args;
+    free_list();
+    exit(EXIT_SUCCESS);
+    
+    /* not reached */
+    return 0;
+}
+
+int (*find_builtin(char *name))(int, char* []) 
+{ 
+    if (strncmp(name, "cd", strlen("cd")) == 0) { 
+        return cd;  
+    }
+    if (strncmp(name, "echo", strlen("echo")) == 0) {
+        return echo;
+    }
+    if (strncmp(name, "exit", strlen("exit")) == 0) {
+        return _exit_;
+    }
+    return NULL; 
+}
+
 char *
 getinput(char *buffer, size_t buflen) {
 	printf(SISH);
@@ -50,7 +111,7 @@ run(Command *c)
     Redirect *r;
     if (c->args[0] == NULL) {
         return;
-    }
+    } 
     for (r = c->redirects; r != NULL; r = r->next) {
         r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
         lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
@@ -65,9 +126,21 @@ run(Command *c)
 }
 
 void
+trace(int argc, char* args[])
+{
+    int i;
+    printf("+ ");
+    for (i = 0; i < argc; i++) {
+        printf("%s ", args[i]);
+    }
+    printf("\n");
+}
+
+void
 run_list()
 {
     Command *c;
+    int (*builtin)(int, char* []);
     pid_t child[n_cmd];
     int pipefd[2], i;
 
@@ -78,6 +151,16 @@ run_list()
     
     for (c = head, i = 0; c != NULL; c = c->next, i++) {
         Redirect *r;
+        
+        if (f_trace == 1) {
+            trace(c->argc, c->args);
+        }
+
+        builtin = find_builtin(c->args[0]);
+        if (builtin != NULL && c == tail) {
+            builtin(c->argc, c->args);
+            return;
+        }
         child[i] = fork();
         if (child[i] == 0) {
             if (c != head) {
@@ -88,6 +171,10 @@ run_list()
             }
             close(pipefd[0]);
             close(pipefd[1]);
+            if (builtin != NULL) {
+                builtin(c->argc, c->args);
+                exit(EXIT_SUCCESS);
+            }
             run(c);
         }
         assert(child[i] > 0);
@@ -110,26 +197,29 @@ free_list()
     }
 }
 
-
-
 void
-sig_quit(int signo) {
-    (void)signo;
-}
-
-void
-sig_int(int signo) {
-	(void)signo;
+sig_handler(int signum) {
+    if (signum == SIGTERM) {
+        free_list();
+        exit(EXIT_SUCCESS);
+    } else {
+        interrupted = 1;
+        printf("\n");
+    }
 }
 
 int
 main(int argc, char **argv)
 {
-    int ch, f_trace = 0, f_cmd = 0;
+    int ch;
     char *c, buf[BUFSIZ];
     
-    signal(SIGQUIT, sig_quit);
-    signal(SIGINT, sig_int);
+    struct sigaction act = { 0 };
+    act.sa_handler = &sig_handler;
+    sigaction(SIGINT, &act, 0);
+    sigaction(SIGQUIT, &act, 0);
+    sigaction(SIGTERM, &act, 0);
+    sigaction(SIGTSTP, &act, 0);
 
     while ((ch = getopt(argc, argv, OPTSTR)) != -1) {
         switch (ch) {
@@ -155,8 +245,12 @@ main(int argc, char **argv)
         }
         return EXIT_SUCCESS;
     }
-
-    while (getinput(buf, sizeof(buf))) {
+    
+    while (getinput(buf, sizeof(buf)) || interrupted) {
+        if (interrupted) {
+            interrupted = 0;
+            continue;
+        }
         buf[strlen(buf) - 1] = '\0';    
         if (strlen(buf) == 0) {
             continue;
