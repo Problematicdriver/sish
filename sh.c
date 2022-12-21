@@ -1,10 +1,11 @@
 #include "sh.h"
 
 #define OPTSTR "xc:"
+#define SISH   "sish$ "
 
 char *
 getinput(char *buffer, size_t buflen) {
-	printf("sish$ ");
+	printf(SISH);
 	return fgets(buffer, buflen, stdin);
 }
 
@@ -51,7 +52,7 @@ run(Command *c)
         return;
     }
     for (r = c->redirects; r != NULL; r = r->next) {
-        r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU | S_IRWXG);
+        r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
         lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
         dup2(r->fd, r->red_fileno);
     }
@@ -109,11 +110,26 @@ free_list()
     }
 }
 
+
+
+void
+sig_quit(int signo) {
+    (void)signo;
+}
+
+void
+sig_int(int signo) {
+	(void)signo;
+}
+
 int
 main(int argc, char **argv)
 {
     int ch, f_trace = 0, f_cmd = 0;
     char *c, buf[BUFSIZ];
+    
+    signal(SIGQUIT, sig_quit);
+    signal(SIGINT, sig_int);
 
     while ((ch = getopt(argc, argv, OPTSTR)) != -1) {
         switch (ch) {
@@ -152,6 +168,7 @@ main(int argc, char **argv)
         run_list();
         free_list();
     }
-    
+
+    /* not reached */
     return EXIT_SUCCESS;
 }

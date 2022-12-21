@@ -3,6 +3,8 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <signal.h>
+#include<errno.h>
 
 #include "list.h"
 
