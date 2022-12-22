@@ -9,14 +9,14 @@ int f_cmd;
 int last_status;
 
 int 
-cd(int argc, char* args[]) 
+cd(Command *c) 
 {
     char *path;
-    if (argc != 1 && argc != 2) {
+    if (c->argc != 1 && c->argc != 2) {
         fprintf(stderr, "Usage: cd [directory]\n");
         return EXIT_FAILURE;
     }
-    if ((path = args[1]) == NULL) {
+    if ((path = c->args[1]) == NULL) {
         if ((path = getenv("HOME")) == NULL) {
             return EXIT_FAILURE;
         }
@@ -29,29 +29,43 @@ cd(int argc, char* args[])
 }
 
 int
-echo(int argc, char* args[])
+echo(Command *c)
 {
-    int i;
-    for (i = 1; i < argc; i++) {
-        if (strncmp(args[i], "$$", strlen("$$")) == 0) {
+    int fd, i;
+    char buff[BUFSIZ];
+    Redirect *r;
+    
+    /*
+     * Won't fork for built-ins so we need to preserve STDIN and
+     * STDOUT by duplicating the original fds and swap it back
+     * before return
+     */
+
+    for (r = c->redirects; r != NULL; r = r->next) {
+        fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
+        lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
+        dup2(fd, r->red_fileno);
+        close(fd);
+    }
+    for (i = 1; i < c->argc; i++) {
+        if (strncmp(c->args[i], "$$", strlen("$$")) == 0) {
             printf("%d ", getpid());
             continue;
         }
-        if (strncmp(args[i], "$?", strlen("$?")) == 0) {
+        if (strncmp(c->args[i], "$?", strlen("$?")) == 0) {
             printf("%d ", last_status);
             continue;
         }
-        printf("%s ", args[i]);
+        printf("%s%s", c->args[i], i == c->argc - 1 ? "" : " ");
     }
     printf("\n");
+   
     return EXIT_SUCCESS;
 }
 
 int
-_exit_(int argc, char* args[])
+_exit_(Command *c)
 {
-    (void)argc;
-    (void)args;
     free_list();
     exit(EXIT_SUCCESS);
     
@@ -59,7 +73,7 @@ _exit_(int argc, char* args[])
     return 0;
 }
 
-int (*find_builtin(char *name))(int, char* []) 
+int (*find_builtin(char *name))(Command*) 
 { 
     if (strncmp(name, "cd", strlen("cd")) == 0) { 
         return cd;  
@@ -117,13 +131,15 @@ run(Command *c)
 {
     char name[20];
     Redirect *r;
+    int fd;
     if (c->args[0] == NULL) {
         exit(EXIT_FAILURE);
     } 
     for (r = c->redirects; r != NULL; r = r->next) {
-        r->fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
-        lseek(r->fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
-        dup2(r->fd, r->red_fileno);
+        fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
+        lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
+        dup2(fd, r->red_fileno);
+        close(fd);
     }
     if (execvp(c->args[0], c->args) < 0) {
        perror("execvp");
@@ -134,17 +150,18 @@ int
 run_list()
 {
     Command *c;
-    int (*builtin)(int, char* []);
+    int (*builtin)(Command*);
     pid_t child[n_cmd];
-    int pipefd[2], i, exit_status = 0;
+    int pipefd[2], i, exit_status;
+    int tmp_in, tmp_out;
 
     memset(&child, 0, sizeof(child));
+    
     if (pipe(pipefd) < 0) {
         perror("pipe");
     }
-    
+
     for (c = head, i = 0; c != NULL; c = c->next, i++) {
-        Redirect *r;
         
         if (f_trace == 1) {
             print_cmd(c);
@@ -152,9 +169,23 @@ run_list()
 
         builtin = find_builtin(c->args[0]);
         if (builtin != NULL && c == tail) {
-            builtin(c->argc, c->args);
-            return EXIT_SUCCESS;
+            tmp_in = fcntl(STDIN_FILENO, F_DUPFD);
+            tmp_out = fcntl(STDOUT_FILENO, F_DUPFD);
+            
+            if (c != head) {
+                dup2(pipefd[0], STDIN_FILENO);
+            }
+            
+            builtin(c);
+            
+            dup2(tmp_in, STDIN_FILENO);
+            dup2(tmp_out, STDOUT_FILENO);
+            close(tmp_in);
+            close(tmp_out);
+            
+            break;
         }
+
         child[i] = fork();
         if (child[i] == 0) {
             if (c != head) {
@@ -168,7 +199,7 @@ run_list()
             close(pipefd[1]);
             
             if (builtin != NULL) {
-                builtin(c->argc, c->args);
+                builtin(c);
                 exit(EXIT_SUCCESS);
             }
             run(c);
@@ -179,7 +210,7 @@ run_list()
     close(pipefd[0]);
     close(pipefd[1]);
 
-    if (bg == 0 && n_cmd > 0) {
+    if (bg == 0 && n_cmd > 0 && child[n_cmd - 1] > 0) {
         waitpid(child[n_cmd-1], &exit_status, 0);
     }
     return exit_status;
@@ -197,10 +228,13 @@ free_list()
 }
 
 void
-sig_handler(int signum) {
+action(int signum, siginfo_t *info, void *secret) {
     if (signum == SIGTERM) {
         free_list();
         exit(EXIT_SUCCESS);
+    } else if (signum == SIGCHLD) {
+        interrupted = 1;
+        printf("SIGCHLD\n");
     } else {
         interrupted = 1;
         printf("\n");
@@ -212,13 +246,15 @@ main(int argc, char **argv)
 {
     int ch;
     char *c, buf[BUFSIZ];
-    
+
     struct sigaction act = { 0 };
-    act.sa_handler = &sig_handler;
+    act.sa_flags = SA_SIGINFO;
+    act.sa_sigaction = &action;
     sigaction(SIGINT, &act, 0);
     sigaction(SIGQUIT, &act, 0);
     sigaction(SIGTERM, &act, 0);
     sigaction(SIGTSTP, &act, 0);
+    sigaction(SIGCHLD, &act, 0);
 
     while ((ch = getopt(argc, argv, OPTSTR)) != -1) {
         switch (ch) {
@@ -245,10 +281,13 @@ main(int argc, char **argv)
         return EXIT_SUCCESS;
     }
     
+    fflush(stdin);
+
     while (getinput(buf, sizeof(buf)) || interrupted) {
         if (interrupted) {
             interrupted = 0;
-            continue;
+            if (strlen(buf) == 0) 
+                continue;
         }
         buf[strlen(buf) - 1] = '\0';    
         if (strlen(buf) == 0) {
@@ -260,6 +299,7 @@ main(int argc, char **argv)
         }
         last_status = run_list();
         free_list();
+        buf[0] = '\0';
     }
 
     /* not reached */

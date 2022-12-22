@@ -10,7 +10,6 @@
 int bg, n_cmd;
 struct redirect {
     int red_fileno;
-    int fd;
     int f_cat;
     char *file;
     struct redirect *next;
