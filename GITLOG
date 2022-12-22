@@ -1,0 +1,95 @@
+commit 8d1f2ce0aa00af85322162c13ffac56030540290
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Thu Dec 22 07:54:54 2022 +0000
+
+    Play around with it in gdb and found the cause of inconsistent behavior in backgrounding mode, updated loop guard to produces consistent behavior
+
+commit 06c5c7addd1916973a7a80305d456a497a8a0016
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Wed Dec 21 23:39:06 2022 +0000
+
+    background is done, tracing and exit status is done
+
+commit b9fcfd80ab24da27c3a8ef963e2e41e30708e5d7
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Wed Dec 21 22:52:45 2022 +0000
+
+    Added builtins, implemented tracing
+
+commit ceb75b371a8a08d4cde8ec395ab2e97b4dbd83e6
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Wed Dec 21 04:57:35 2022 +0000
+
+    added sig handler for sig quit and sig int
+
+commit f476e6ca6fd46e9235caed4d3e962827594556c2
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Tue Dec 20 18:08:13 2022 +0000
+
+    remote branch setup
+
+commit a0e0277de1b72f2367403cbdbd327f77ac19b85d
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Tue Dec 20 17:54:39 2022 +0000
+
+    cleaned up headerfiles
+
+commit b529fe202a4f31dbf7fa7bdd36f7e08ef225dc9b
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Tue Dec 20 17:51:40 2022 +0000
+
+    revised list to be singly linked
+
+commit 02766b76b3df3cdbf5a4ea60c6a86d4017c16f21
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Tue Dec 20 17:40:08 2022 +0000
+
+    added EOF to lexer
+
+commit 63deebef5e63eeeaa433c8db2bd03b281d30956d
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Tue Dec 20 17:33:02 2022 +0000
+
+    added function to free memory before quit
+
+commit 36950af60d67d6b6dbfd65330c58914f9a5bb1bd
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Mon Dec 19 22:09:05 2022 +0000
+
+    cleaned up the code a bit
+
+commit ed699a39cd8bf1122833af5789d08acf04106a46
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Mon Dec 19 20:58:53 2022 +0000
+
+    Fixed error handling of getopt, added support to cat, addded code that cleans up fds after a process is done running
+
+commit 54b7360bde79c4295a589e9f8fe46d947217c5ae
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Mon Dec 19 06:58:47 2022 +0000
+
+    Made some good progress today be adding the main loop, implemented -c option, and file redirection
+
+commit 1215c57bc5938721a1720161ebfdbd466141b428
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Sat Dec 17 03:48:08 2022 +0000
+
+    Choose linked list as the data structure to hold all commands in a pipe line, implemented and intergrated the constructors into parser. Wrote debug printer for the list
+
+commit d23d25f3ebc6c60f53140720d136442d4eb39454
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Fri Dec 16 05:03:53 2022 +0000
+
+    Decided today that lexer along is not enough to get the job doen so implemented the grammar with yacc. Input now parse correctly and I am trying to find a good data structure for the actual execution
+
+commit 36552f50b699d8bf0b5a4c1c722f6c43581f10cf
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Thu Dec 15 00:40:12 2022 +0000
+
+    Setting up lexer for the shell
+
+commit f4b41d1bd50e4d44a82a35b810a0d14209330df4
+Author: Problematicdriver <jguo33@illinois.edu>
+Date:   Thu Dec 15 00:39:45 2022 +0000
+
+    Setting up lexer for the shell

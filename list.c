@@ -43,6 +43,9 @@ add_red(Command *cmd, Redirect *r)
 Command*
 add_arg(Command *cmd, char *arg)
 {
+    if (cmd->argc = MAX_ARGC) {
+        return cmd;
+    }
     cmd->args[cmd->argc] = arg;
     cmd->argc++;
     return cmd;

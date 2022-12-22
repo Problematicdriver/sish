@@ -19,7 +19,7 @@ typedef struct redirect Redirect;
 struct command {
     int argc;
     char* args[MAX_ARGC];
-    
+   
     /* next ommand in the pipe */
     struct command *next;
 

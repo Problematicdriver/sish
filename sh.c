@@ -18,11 +18,12 @@ cd(Command *c)
     }
     if ((path = c->args[1]) == NULL) {
         if ((path = getenv("HOME")) == NULL) {
+            fprintf(stderr, "home not found\n");
             return EXIT_FAILURE;
         }
     }
     if (chdir(path) < 0) {
-        perror("chdir");
+        perror("cd");
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;
@@ -35,18 +36,20 @@ echo(Command *c)
     char buff[BUFSIZ];
     Redirect *r;
     
-    /*
-     * Won't fork for built-ins so we need to preserve STDIN and
-     * STDOUT by duplicating the original fds and swap it back
-     * before return
-     */
-
     for (r = c->redirects; r != NULL; r = r->next) {
-        fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
-        lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
-        dup2(fd, r->red_fileno);
+        printf("%s %d\n", r->file, r->red_fileno); 
+        if ((fd = open(r->file, O_RDONLY, S_IRWXU)) < 0) {
+            perror("open");
+        }
+        if (lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR) < 0) {
+            perror("lseek");
+        }
+        if (dup2(fd, r->red_fileno) < 0) {
+            perror("dup2");
+        }
         close(fd);
     }
+
     for (i = 1; i < c->argc; i++) {
         if (strncmp(c->args[i], "$$", strlen("$$")) == 0) {
             printf("%d ", getpid());
@@ -66,6 +69,7 @@ echo(Command *c)
 int
 _exit_(Command *c)
 {
+    (void*)c;
     free_list();
     exit(EXIT_SUCCESS);
     
@@ -89,8 +93,11 @@ int (*find_builtin(char *name))(Command*)
 
 char *
 getinput(char *buffer, size_t buflen) {
-	printf(SISH);
-	return fgets(buffer, buflen, stdin);
+    if (interrupted) {
+        interrupted = 0;
+    }
+    printf("sish$ ");
+    return fgets(buffer, buflen, stdin);
 }
 
 void
@@ -136,14 +143,24 @@ run(Command *c)
         exit(EXIT_FAILURE);
     } 
     for (r = c->redirects; r != NULL; r = r->next) {
-        fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU);
-        lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR);
-        dup2(fd, r->red_fileno);
+        if ((fd = open(r->file, O_RDWR | O_CREAT, S_IRWXU)) < 0) {
+            perror("open");
+            exit(EXIT_FAILURE);
+        }
+        if (lseek(fd, 0, r->f_cat == 1 ? SEEK_END : SEEK_CUR) < 0) {
+            perror("lseek");
+            exit(EXIT_FAILURE);
+        }
+        if (dup2(fd, r->red_fileno) < 0) {
+            perror("dup2");
+            exit(EXIT_FAILURE);
+        }
         close(fd);
     }
     if (execvp(c->args[0], c->args) < 0) {
-       perror("execvp");
+        perror(c->args[0]);
     }
+    exit(EXIT_FAILURE);
 }
 
 int
@@ -168,18 +185,39 @@ run_list()
         }
 
         builtin = find_builtin(c->args[0]);
+        
+        /*
+         * Won't fork for built-ins at tail so we need to preserve STDIN and
+         * STDOUT by duplicating the original fds and swap it back before return
+         */
+
         if (builtin != NULL && c == tail) {
-            tmp_in = fcntl(STDIN_FILENO, F_DUPFD);
-            tmp_out = fcntl(STDOUT_FILENO, F_DUPFD);
-            
+            if ((tmp_in = fcntl(STDIN_FILENO, F_DUPFD)) < 0) {
+                perror("fcntl");
+                return EXIT_FAILURE;
+            } 
+            if ((tmp_out = fcntl(STDOUT_FILENO, F_DUPFD)) < 0) {
+                perror("fcntl");
+                return EXIT_FAILURE;
+            }
             if (c != head) {
-                dup2(pipefd[0], STDIN_FILENO);
+                if (dup2(pipefd[0], STDIN_FILENO) < 0) {
+                    perror("dup2");
+                    return EXIT_FAILURE;
+                }
             }
             
             builtin(c);
             
-            dup2(tmp_in, STDIN_FILENO);
-            dup2(tmp_out, STDOUT_FILENO);
+            if (dup2(tmp_in, STDIN_FILENO) < 0) {
+                perror("dup2");
+                return EXIT_FAILURE;
+            }
+            if (dup2(tmp_out, STDOUT_FILENO) < 0) {
+                perror("dup2");
+                return EXIT_FAILURE;
+            }
+            
             close(tmp_in);
             close(tmp_out);
             
@@ -187,6 +225,10 @@ run_list()
         }
 
         child[i] = fork();
+        if (child[i] < 0) {
+            perror("fork");
+            return EXIT_FAILURE;
+        }
         if (child[i] == 0) {
             if (c != head) {
                 dup2(pipefd[0], STDIN_FILENO);
@@ -197,7 +239,7 @@ run_list()
             
             close(pipefd[0]);
             close(pipefd[1]);
-            
+
             if (builtin != NULL) {
                 builtin(c);
                 exit(EXIT_SUCCESS);
@@ -233,28 +275,38 @@ action(int signum, siginfo_t *info, void *secret) {
         free_list();
         exit(EXIT_SUCCESS);
     } else if (signum == SIGCHLD) {
+        /*
+         * This is not desirable because it interrupt user
+         * and is no nessessary, but I can't find a better way
+         * to handle SIGCHLD
+         */
         interrupted = 1;
-        printf("SIGCHLD\n");
+        printf("job done\n");
     } else {
         interrupted = 1;
         printf("\n");
     }
 }
 
+int signals[] = {SIGINT, SIGQUIT, SIGTERM, SIGTSTP, SIGCHLD};
+
 int
 main(int argc, char **argv)
 {
-    int ch;
+    int ch, i;
     char *c, buf[BUFSIZ];
 
     struct sigaction act = { 0 };
     act.sa_flags = SA_SIGINFO;
     act.sa_sigaction = &action;
-    sigaction(SIGINT, &act, 0);
-    sigaction(SIGQUIT, &act, 0);
-    sigaction(SIGTERM, &act, 0);
-    sigaction(SIGTSTP, &act, 0);
-    sigaction(SIGCHLD, &act, 0);
+    
+    for (i = 0; i < sizeof(signals)/sizeof(int); i++) {
+        if (sigaction(signals[i], &act, 0) < 0) {
+            perror("sigaction");
+            printf("%d\n", i);
+            exit(EXIT_FAILURE);
+        }
+    }
 
     while ((ch = getopt(argc, argv, OPTSTR)) != -1) {
         switch (ch) {
@@ -275,33 +327,34 @@ main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     if (f_cmd) {
+        printf("+ %s\n", c);
         if (execlp(c, c) < 0) {
             perror("execvp");
         }
         return EXIT_SUCCESS;
     }
-    
-    fflush(stdin);
-
-    while (getinput(buf, sizeof(buf)) || interrupted) {
-        if (interrupted) {
+   
+    while (getinput(buf, sizeof(buf)) || interrupted == 1) {
+        if (interrupted == 1) {
             interrupted = 0;
-            if (strlen(buf) == 0) 
-                continue;
+            continue;
         }
         buf[strlen(buf) - 1] = '\0';    
         if (strlen(buf) == 0) {
             continue;
         }
-        yyin = fmemopen(&buf, strlen(buf), "r");
+        
+        if ((yyin = fmemopen(&buf, strlen(buf), "r")) == NULL) {
+            perror("fmemopen");
+            continue;
+        }
         if (yyparse() == 1) {
             perror("yyparse");
         }
         last_status = run_list();
         free_list();
-        buf[0] = '\0';
     }
-
+    
     /* not reached */
     return EXIT_SUCCESS;
 }
